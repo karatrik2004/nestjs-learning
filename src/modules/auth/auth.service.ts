@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { compare, hash } from 'bcrypt';
 import { Repository } from 'typeorm';
+import { Role } from '../roles/role.entity';
 import { User } from '../users/user.entity';
 
 type AuthTokens = {
@@ -27,6 +28,8 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(Role)
+    private readonly rolesRepository: Repository<Role>,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -39,6 +42,7 @@ export class AuthService {
     );
     const user = await this.usersRepository.findOne({
       where: { email },
+      relations: { roleMaster: true },
     });
 
     if (!user) {
@@ -53,14 +57,30 @@ export class AuthService {
     return isMatch ? user : null;
   }
 
+  async isBackendRole(role: string): Promise<boolean> {
+    const normalized = this.normalizeRoleName(role);
+    if (!normalized) {
+      return false;
+    }
+
+    const roles = await this.rolesRepository.find({
+      select: { name: true, canAccessBackend: true },
+    });
+    const matchedRole = roles.find(
+      (existingRole) => this.normalizeRoleName(existingRole.name) === normalized,
+    );
+    return Boolean(matchedRole?.canAccessBackend);
+  }
+
   async generateTokens(user: User): Promise<AuthTokens> {
     console.log(
       `[AUTH SERVICE][STEP A3] Generating tokens for userId=${user.id}`,
     );
+    const roleName = await this.resolveRoleName(user);
     const payload = {
       sub: user.id,
       email: user.email,
-      role: user.role,
+      role: roleName,
     };
 
     const accessToken = await this.jwtService.signAsync(
@@ -142,6 +162,7 @@ export class AuthService {
 
       const user = await this.usersRepository.findOne({
         where: { id: payload.sub },
+        relations: { roleMaster: true },
       });
 
       if (!user || !user.refreshTokenHash) {
@@ -181,5 +202,26 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  private normalizeRoleName(value: string): string {
+    return value.trim().toLowerCase().replaceAll('_', ' ').replace(/\s+/g, ' ');
+  }
+
+  async getUserRoleName(user: User): Promise<string> {
+    return this.resolveRoleName(user);
+  }
+
+  private async resolveRoleName(user: User): Promise<string> {
+    if (user.roleMaster?.name) {
+      return user.roleMaster.name;
+    }
+    if (user.roleId) {
+      const role = await this.rolesRepository.findOne({ where: { id: user.roleId } });
+      if (role?.name) {
+        return role.name;
+      }
+    }
+    return 'unknown';
   }
 }

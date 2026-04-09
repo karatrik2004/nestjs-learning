@@ -1,5 +1,16 @@
-import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UseInterceptors,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
+import { ApiResponseEnvelopeInterceptor } from '../../common/interceptors/api-response-envelope.interceptor';
+import { SanitizeUserResponseInterceptor } from '../../common/interceptors/sanitize-user-response.interceptor';
 import { TrimBodyPipe } from '../../common/pipes/trim-body.pipe';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -65,6 +76,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async login(
     @Body(TrimBodyPipe) body: LoginDto,
     @Res() res: Response,
@@ -86,6 +98,20 @@ export class AuthController {
       return;
     }
 
+    const userRole = await this.authService.getUserRoleName(user);
+    const canLoginBackend = await this.authService.isBackendRole(userRole);
+    if (!canLoginBackend) {
+      res
+        .status(403)
+        .send(
+          this.renderLoginPage(
+            'This account does not have backend access. Please use frontend login.',
+            email,
+          ),
+        );
+      return;
+    }
+
     const tokens = await this.authService.generateTokens(user);
     console.log('[AUTH][STEP 6] Tokens generated, setting cookies');
     this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
@@ -93,27 +119,65 @@ export class AuthController {
     res.redirect(303, '/dashboard');
   }
 
+  @Post('app/login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseInterceptors(
+    SanitizeUserResponseInterceptor,
+    ApiResponseEnvelopeInterceptor,
+  )
+  async appLogin(
+    @Body(TrimBodyPipe) body: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<unknown> {
+    const email = body.email.trim();
+    const password = body.password;
+    const user = await this.authService.validateUserCredentials(email, password);
+    if (!user) {
+      res.status(401);
+      return { message: 'Invalid email or password' };
+    }
+
+    const tokens = await this.authService.generateTokens(user);
+    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+    return {
+      message: 'App login success',
+      user: {
+        id: user.id,
+        email: user.email,
+        role: await this.authService.getUserRoleName(user),
+      },
+      // Intentionally included to show sanitize interceptor behavior.
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
+  }
+
   @Post('refresh')
-  async refresh(@Req() req: Request, @Res() res: Response): Promise<void> {
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @UseInterceptors(ApiResponseEnvelopeInterceptor)
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<unknown> {
     console.log('[AUTH][STEP R1] POST /refresh received');
     const refreshToken = this.getCookieValue(req, 'refreshToken');
     if (!refreshToken) {
       console.log('[AUTH][STEP R2] Refresh failed: no refresh token cookie');
-      res.status(401).send('Unauthorized');
-      return;
+      res.status(401);
+      return { message: 'Unauthorized' };
     }
 
     const tokens = await this.authService.refreshTokens(refreshToken);
     if (!tokens) {
       console.log('[AUTH][STEP R2] Refresh failed: token invalid or expired');
       this.clearAuthCookies(res);
-      res.status(401).send('Unauthorized');
-      return;
+      res.status(401);
+      return { message: 'Unauthorized' };
     }
 
     console.log('[AUTH][STEP R3] Refresh success, rotating cookies');
     this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-    res.status(200).json({ message: 'Token refreshed' });
+    return { message: 'Token refreshed' };
   }
 
   @Get('logout')
@@ -298,8 +362,14 @@ export class AuthController {
       const accessPayload =
         await this.authService.verifyAccessToken(accessToken);
       if (accessPayload) {
-        console.log('[AUTH][SESSION] Access token valid');
-        return true;
+        const canLoginBackend = await this.authService.isBackendRole(
+          accessPayload.role,
+        );
+        if (canLoginBackend) {
+          console.log('[AUTH][SESSION] Access token valid for admin panel');
+          return true;
+        }
+        console.log('[AUTH][SESSION] Access token valid but role is not admin');
       }
       console.log('[AUTH][SESSION] Access token invalid/expired');
     }
@@ -336,14 +406,19 @@ export class AuthController {
     accessToken: string,
     refreshToken: string,
   ): void {
+    const isProd = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
+    const sameSite = isProd ? 'strict' : 'lax';
+
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite,
       maxAge: 15 * 60 * 1000,
     });
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
   }

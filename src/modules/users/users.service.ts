@@ -2,18 +2,33 @@ import { Injectable } from '@nestjs/common';
 import { hash } from 'bcrypt';
 import { Not, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Role } from '../roles/role.entity';
 import { User } from './user.entity';
-import { EmailAlreadyExistsError } from './users.errors';
+import { EmailAlreadyExistsError, RoleNotFoundError } from './users.errors';
 
 export type UsersListFilters = {
   search?: string;
   role?: string;
 };
 
+export type UsersDashboardStats = {
+  totalUsers: number;
+  totalAdmins: number;
+  totalNormalUsers: number;
+  usersWithProfileImage: number;
+  usersWithoutProfileImage: number;
+  recentUsers: Array<{
+    id: number;
+    name: string | null;
+    email: string;
+    role: string;
+  }>;
+};
+
 type CreateUserInput = {
   email: string;
   password: string;
-  role: string;
+  roleId: number;
   name?: string;
   phone?: string;
   profileImage?: string;
@@ -21,7 +36,7 @@ type CreateUserInput = {
 
 type UpdateUserInput = {
   email: string;
-  role: string;
+  roleId: number;
   name?: string;
   phone?: string;
   profileImage?: string;
@@ -33,11 +48,17 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(Role)
+    private readonly rolesRepository: Repository<Role>,
   ) {}
 
   async findAll(filters?: UsersListFilters): Promise<User[]> {
     const query = this.usersRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roleMaster', 'roleMaster')
+      .where(
+        "(roleMaster.name IS NULL OR LOWER(TRIM(roleMaster.name)) <> 'super admin')",
+      )
       .orderBy('user.id', 'DESC');
 
     const search = filters?.search?.trim();
@@ -50,14 +71,74 @@ export class UsersService {
 
     const role = filters?.role?.trim();
     if (role) {
-      query.andWhere('user.role = :role', { role });
+      query.andWhere('LOWER(roleMaster.name) = LOWER(:role)', { role });
     }
 
     return query.getMany();
   }
 
+  async getDashboardStats(): Promise<UsersDashboardStats> {
+    const nonSuperAdminCondition =
+      "(roleMaster.name IS NULL OR LOWER(TRIM(roleMaster.name)) <> 'super admin')";
+
+    const [totalUsers, totalAdmins, usersWithProfileImage, recentUsersRaw] =
+      await Promise.all([
+        this.usersRepository
+          .createQueryBuilder('user')
+          .leftJoin('user.roleMaster', 'roleMaster')
+          .where(nonSuperAdminCondition)
+          .getCount(),
+        this.usersRepository
+          .createQueryBuilder('user')
+          .leftJoin('user.roleMaster', 'roleMaster')
+          .where(nonSuperAdminCondition)
+          .andWhere(
+            'LOWER(roleMaster.name) IN (:...adminRoleNames)',
+            { adminRoleNames: ['administrator', 'super admin'] },
+          )
+          .getCount(),
+        this.usersRepository
+          .createQueryBuilder('user')
+          .leftJoin('user.roleMaster', 'roleMaster')
+          .where(nonSuperAdminCondition)
+          .andWhere('user.profileImage IS NOT NULL')
+          .andWhere("TRIM(user.profileImage) <> ''")
+          .getCount(),
+        this.usersRepository
+          .createQueryBuilder('user')
+          .leftJoinAndSelect('user.roleMaster', 'roleMaster')
+          .where(nonSuperAdminCondition)
+          .orderBy('user.id', 'DESC')
+          .take(5)
+          .getMany(),
+      ]);
+
+    const totalNormalUsers = Math.max(totalUsers - totalAdmins, 0);
+    const usersWithoutProfileImage = Math.max(
+      totalUsers - usersWithProfileImage,
+      0,
+    );
+
+    return {
+      totalUsers,
+      totalAdmins,
+      totalNormalUsers,
+      usersWithProfileImage,
+      usersWithoutProfileImage,
+      recentUsers: recentUsersRaw.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.roleMaster?.name ?? '-',
+      })),
+    };
+  }
+
   async findById(id: number): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { id } });
+    return this.usersRepository.findOne({
+      where: { id },
+      relations: { roleMaster: true },
+    });
   }
 
   async emailExists(email: string, excludeUserId?: number): Promise<boolean> {
@@ -77,11 +158,18 @@ export class UsersService {
       throw new EmailAlreadyExistsError();
     }
 
+    const role = await this.rolesRepository.findOne({
+      where: { id: data.roleId },
+    });
+    if (!role) {
+      throw new RoleNotFoundError();
+    }
+
     const passwordHash = await hash(data.password, 10);
     const user = this.usersRepository.create({
       email: data.email,
       password: passwordHash,
-      role: data.role,
+      roleId: role.id,
       name: data.name?.trim() || null,
       phone: data.phone?.trim() || null,
       profileImage: data.profileImage?.trim() || null,
@@ -95,9 +183,16 @@ export class UsersService {
       throw new EmailAlreadyExistsError();
     }
 
+    const role = await this.rolesRepository.findOne({
+      where: { id: data.roleId },
+    });
+    if (!role) {
+      throw new RoleNotFoundError();
+    }
+
     const updateData: Partial<User> = {
       email: data.email,
-      role: data.role,
+      roleId: role.id,
       name: data.name?.trim() || null,
       phone: data.phone?.trim() || null,
     };

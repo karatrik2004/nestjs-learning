@@ -7,23 +7,29 @@ type FormData = {
   email?: string;
   phone?: string;
   profileImage?: string;
-  role?: string;
+  roleId?: number;
+  roleOptions?: Array<{ id: number; name: string }>;
   errorMessage?: string;
+  fieldErrors?: Record<string, string>;
 };
 
 export class UsersViews {
-  static list(users: User[], filters?: UsersListFilters): string {
+  static list(
+    users: User[],
+    filters?: UsersListFilters,
+    showRolesMenu = true,
+  ): string {
     const safeSearch = this.escapeHtml(filters?.search ?? '');
     const safeRole = this.escapeHtml(filters?.role ?? '');
     const rows = users
       .map(
-        (user) => `
+        (user, index) => `
           <tr>
-            <td>${user.id}</td>
+            <td>${index + 1}</td>
             <td>${this.escapeHtml(user.name ?? '-')}</td>
             <td>${this.escapeHtml(user.email)}</td>
             <td>${this.escapeHtml(user.phone ?? '-')}</td>
-            <td>${this.escapeHtml(user.role)}</td>
+            <td>${this.escapeHtml(user.roleMaster?.name ?? '-')}</td>
             <td>${
               user.profileImage
                 ? `<img src="${this.escapeHtml(
@@ -39,7 +45,7 @@ export class UsersViews {
                     <path d="M13.5 6.5l4 4" stroke="#7dd3fc" stroke-width="1.8" stroke-linecap="round"/>
                   </svg>
                 </a>
-                <form method="post" action="/users/${user.id}/delete" style="display:inline;">
+                <form method="post" action="/users/${user.id}/delete" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this user?');">
                   <button type="submit" title="Delete" aria-label="Delete" style="display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:10px; border:1px solid rgba(239,68,68,0.35); background: rgba(239,68,68,0.12); cursor:pointer;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M4 7h16" stroke="#fca5a5" stroke-width="1.8" stroke-linecap="round"/>
@@ -57,13 +63,19 @@ export class UsersViews {
       )
       .join('');
 
+    const navItems = [
+      { label: 'Dashboard', href: '/dashboard' },
+      { label: 'Users', href: '/users', isActive: true },
+      { label: 'FAQ', href: '/faqs' },
+    ];
+    if (showRolesMenu) {
+      navItems.push({ label: 'Roles', href: '/roles' });
+    }
+
     return AdminLayout.render({
       title: 'Users',
       pageTitle: 'Users',
-      navItems: [
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Users', href: '/users', isActive: true },
-      ],
+      navItems,
       contentHtml: `
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
           <div>
@@ -110,31 +122,51 @@ export class UsersViews {
     });
   }
 
-  static form(title: string, action: string, data?: FormData): string {
+  static form(
+    title: string,
+    action: string,
+    data?: FormData,
+    showRolesMenu = true,
+  ): string {
     const errorBlock = data?.errorMessage
       ? `<p style="color:#b91c1c;font-weight:bold;">${this.escapeHtml(
           data.errorMessage,
         )}</p>`
       : '';
+    const fieldErrors = data?.fieldErrors ?? {};
 
     const isEdit = title === 'Edit User';
     const safeName = this.escapeHtml(data?.name ?? '');
     const safeEmail = this.escapeHtml(data?.email ?? '');
     const safePhone = this.escapeHtml(data?.phone ?? '');
-    const safeRole = this.escapeHtml(data?.role ?? 'user');
+    const selectedRoleId = data?.roleId ?? 0;
+    const roleOptions = data?.roleOptions ?? [];
+    const roleOptionsHtml = roleOptions
+      .map((role) => {
+        const isSelected = selectedRoleId === role.id;
+        const safeLabel = this.escapeHtml(role.name);
+        return `<option value="${role.id}" ${isSelected ? 'selected' : ''}>${safeLabel}</option>`;
+      })
+      .join('');
     const imagePreview = data?.profileImage
       ? `<img src="${this.escapeHtml(
           data.profileImage,
         )}" alt="profile" style="width:64px;height:64px;object-fit:cover;border-radius:50%;border:1px solid rgba(148,163,184,0.18);" />`
       : '';
 
+    const navItems = [
+      { label: 'Dashboard', href: '/dashboard' },
+      { label: 'Users', href: '/users', isActive: true },
+      { label: 'FAQ', href: '/faqs' },
+    ];
+    if (showRolesMenu) {
+      navItems.push({ label: 'Roles', href: '/roles' });
+    }
+
     return AdminLayout.render({
       title,
       pageTitle: isEdit ? 'Edit User' : 'Create User',
-      navItems: [
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Users', href: '/users', isActive: true },
-      ],
+      navItems,
       contentHtml: `
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
           <div>
@@ -149,14 +181,17 @@ export class UsersViews {
             <label style="display:grid; gap:6px; color:#cbd5e1; font-size:13px;">
               Name
               <input name="name" value="${safeName}" style="height:40px; border-radius:10px; border:1px solid rgba(148,163,184,0.22); background: rgba(2,6,23,0.25); color:#e2e8f0; padding:0 12px;" />
+              ${this.fieldError(fieldErrors, 'name')}
             </label>
             <label style="display:grid; gap:6px; color:#cbd5e1; font-size:13px;">
               Email *
-              <input name="email" type="email"  value="${safeEmail}" style="height:40px; border-radius:10px; border:1px solid rgba(148,163,184,0.22); background: rgba(2,6,23,0.25); color:#e2e8f0; padding:0 12px;" />
+              <input name="email" type="email" value="${safeEmail}" style="height:40px; border-radius:10px; border:1px solid rgba(148,163,184,0.22); background: rgba(2,6,23,0.25); color:#e2e8f0; padding:0 12px;" />
+              ${this.fieldError(fieldErrors, 'email')}
             </label>
             <label style="display:grid; gap:6px; color:#cbd5e1; font-size:13px;">
               Phone
               <input name="phone" value="${safePhone}" style="height:40px; border-radius:10px; border:1px solid rgba(148,163,184,0.22); background: rgba(2,6,23,0.25); color:#e2e8f0; padding:0 12px;" />
+              ${this.fieldError(fieldErrors, 'phone')}
             </label>
             <label style="display:grid; gap:8px; color:#cbd5e1; font-size:13px;">
               Profile Image
@@ -167,11 +202,16 @@ export class UsersViews {
             </label>
             <label style="display:grid; gap:6px; color:#cbd5e1; font-size:13px;">
               Role
-              <input name="role" value="${safeRole}" style="height:40px; border-radius:10px; border:1px solid rgba(148,163,184,0.22); background: rgba(2,6,23,0.25); color:#e2e8f0; padding:0 12px;" />
+              <select name="roleId" style="height:40px; border-radius:10px; border:1px solid rgba(148,163,184,0.22); background: rgba(2,6,23,0.25); color:#e2e8f0; padding:0 12px;">
+                <option value="">Select role</option>
+                ${roleOptionsHtml}
+              </select>
+              ${this.fieldError(fieldErrors, 'roleId')}
             </label>
             <label style="display:grid; gap:6px; color:#cbd5e1; font-size:13px;">
               Password ${isEdit ? '(leave blank to keep current)' : '*'}
               <input name="password" type="password" ${isEdit ? '' : 'required'} style="height:40px; border-radius:10px; border:1px solid rgba(148,163,184,0.22); background: rgba(2,6,23,0.25); color:#e2e8f0; padding:0 12px;" />
+              ${this.fieldError(fieldErrors, 'password')}
             </label>
             <div style="display:flex; gap:10px; align-items:center; margin-top:4px;">
               <button class="btn btn-primary" type="submit">Save</button>
@@ -190,5 +230,16 @@ export class UsersViews {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#39;');
+  }
+
+  private static fieldError(
+    fieldErrors: Record<string, string>,
+    fieldName: string,
+  ): string {
+    const error = fieldErrors[fieldName];
+    if (!error) {
+      return '';
+    }
+    return `<span style="color:#fca5a5; font-size:12px;">${this.escapeHtml(error)}</span>`;
   }
 }

@@ -1,9 +1,11 @@
 import {
   IsEmail,
+  IsInt,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
+  Min,
 } from 'class-validator';
 
 export class UpdateUserDto {
@@ -20,10 +22,9 @@ export class UpdateUserDto {
   @MaxLength(20)
   phone?: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  role?: string;
+  @IsInt()
+  @Min(1)
+  roleId: number;
 
   @IsOptional()
   @IsString()

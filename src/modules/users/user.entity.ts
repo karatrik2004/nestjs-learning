@@ -1,4 +1,11 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { Role } from '../roles/role.entity';
 
 @Entity('users')
 export class User {
@@ -20,8 +27,12 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   profileImage: string | null;
 
-  @Column({ default: 'admin' })
-  role: string;
+  @Column({ type: 'int', nullable: true })
+  roleId: number | null;
+
+  @ManyToOne(() => Role, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'roleId' })
+  roleMaster: Role | null;
 
   @Column({ type: 'varchar', nullable: true })
   refreshTokenHash: string | null;
