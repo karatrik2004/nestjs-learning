@@ -1,13 +1,24 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { AuthCookieService } from '../../modules/auth/auth-cookie.service';
 import { AuthService, type JwtPayload } from '../../modules/auth/auth.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly authService: AuthService) {}
+  private readonly logger = new Logger(JwtAuthGuard.name);
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly authCookies: AuthCookieService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    console.log('[GUARD][STEP G1] JwtAuthGuard check started');
+    this.logger.debug('JwtAuthGuard check started');
     const http = context.switchToHttp();
     const request = http.getRequest<Request & { user?: JwtPayload }>();
     const response = http.getResponse<Response>();
@@ -17,44 +28,38 @@ export class JwtAuthGuard implements CanActivate {
       const accessPayload =
         await this.authService.verifyAccessToken(accessToken);
       if (accessPayload) {
-        console.log('[GUARD][STEP G2] Access token valid, allowing request');
+        this.logger.debug('Access token valid, allowing request');
         request.user = accessPayload;
         return true;
       }
-      console.log('[GUARD][STEP G2] Access token invalid/expired');
+      this.logger.debug('Access token invalid/expired');
     }
 
     const refreshToken = this.getCookieValue(request, 'refreshToken');
     if (!refreshToken) {
-      console.log('[GUARD][STEP G3] No refresh token, redirecting to /');
+      this.logger.debug('No refresh token, redirecting to /');
       response.redirect(302, '/');
       return false;
     }
 
     const tokens = await this.authService.refreshTokens(refreshToken);
     if (!tokens) {
-      console.log('[GUARD][STEP G3] Refresh failed, clearing cookies');
-      response.clearCookie('accessToken');
-      response.clearCookie('refreshToken');
+      this.logger.debug('Refresh failed, clearing cookies');
+      this.authCookies.clearAuthCookies(response);
       response.redirect(302, '/');
       return false;
     }
 
-    response.cookie('accessToken', tokens.accessToken, {
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 15 * 60 * 1000,
-    });
-    response.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    this.authCookies.setAuthCookies(
+      response,
+      tokens.accessToken,
+      tokens.refreshToken,
+    );
     const refreshedPayload = await this.authService.verifyAccessToken(
       tokens.accessToken,
     );
     if (refreshedPayload) {
-      console.log('[GUARD][STEP G4] Refresh success, request allowed');
+      this.logger.debug('Refresh success, request allowed');
       request.user = refreshedPayload;
     }
 

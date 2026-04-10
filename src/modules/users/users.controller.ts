@@ -19,6 +19,7 @@ import { join } from 'path';
 import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { isSuperAdminUser } from '../../common/auth/role-utils';
 import {
   BACKEND_ACCESS_POLICY,
   Roles,
@@ -66,7 +67,7 @@ export class UsersController {
     const users = await this.usersService.findAll(filters);
     res
       .status(200)
-      .send(UsersViews.list(users, filters, this.isSuperAdmin(user)));
+      .send(UsersViews.list(users, filters, isSuperAdminUser(user)));
   }
 
   @Get('new')
@@ -80,7 +81,7 @@ export class UsersController {
         'Create User',
         '/users/create',
         { roleOptions },
-        this.isSuperAdmin(user),
+        isSuperAdminUser(user),
       ),
     );
   }
@@ -97,7 +98,7 @@ export class UsersController {
     @Res() res: Response,
     @UploadedFile() profileImage: UploadedProfileImage | undefined,
   ): Promise<void> {
-    const showRolesMenu = this.isSuperAdmin(user);
+    const showRolesMenu = isSuperAdminUser(user);
     const profileImageError = this.validateProfileImage(profileImage);
     if (profileImageError) {
       this.removeUploadedFile(profileImage);
@@ -205,7 +206,7 @@ export class UsersController {
         profileImage: user.profileImage ?? '',
         roleId: user.roleId ?? 0,
         roleOptions,
-      }, this.isSuperAdmin(currentUser)),
+      }, isSuperAdminUser(currentUser)),
     );
   }
 
@@ -222,7 +223,7 @@ export class UsersController {
     @Res() res: Response,
     @UploadedFile() profileImage: UploadedProfileImage | undefined,
   ): Promise<void> {
-    const showRolesMenu = this.isSuperAdmin(user);
+    const showRolesMenu = isSuperAdminUser(user);
     const profileImageError = this.validateProfileImage(profileImage);
     if (profileImageError) {
       this.removeUploadedFile(profileImage);
@@ -395,10 +396,6 @@ export class UsersController {
         (role) =>
           role.name !== '' && role.name.toLowerCase() !== 'super admin',
       );
-  }
-
-  private isSuperAdmin(user: JwtPayload | null): boolean {
-    return (user?.role ?? '').trim().toLowerCase() === 'super admin';
   }
 
   private validateProfileImage(file: UploadedProfileImage | undefined): string | null {

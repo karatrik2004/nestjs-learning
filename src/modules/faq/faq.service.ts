@@ -26,15 +26,17 @@ export class FaqService {
     return this.faqRepository.save(faq);
   }
 
-  async update(id: number, question: string, answer: string): Promise<void> {
-    await this.faqRepository.update(id, {
+  async update(id: number, question: string, answer: string): Promise<boolean> {
+    const result = await this.faqRepository.update(id, {
       question: question.trim(),
       answer: answer.trim(),
     });
+    return (result.affected ?? 0) > 0;
   }
 
-  async delete(id: number): Promise<void> {
-    await this.faqRepository.softDelete(id);
+  async delete(id: number): Promise<boolean> {
+    const result = await this.faqRepository.softDelete(id);
+    return (result.affected ?? 0) > 0;
   }
 }
 

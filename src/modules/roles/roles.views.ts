@@ -1,4 +1,5 @@
 import { AdminLayout } from '../../common/views/admin-layout';
+import { buildAdminNavItems } from '../../common/views/admin-nav-items';
 import type { Role } from './role.entity';
 
 export class RolesViews {
@@ -34,19 +35,10 @@ export class RolesViews {
       ? `<p style="color:#fca5a5; margin:0 0 10px;">${this.escapeHtml(errorMessage)}</p>`
       : '';
 
-    const navItems: Array<{ label: string; href: string; isActive?: boolean }> = [
-      { label: 'Dashboard', href: '/dashboard' },
-      { label: 'Users', href: '/users' },
-      { label: 'FAQ', href: '/faqs' },
-    ];
-    if (showRolesMenu) {
-      navItems.push({ label: 'Roles', href: '/roles', isActive: true });
-    }
-
     return AdminLayout.render({
       title: 'Roles',
       pageTitle: 'Role Master',
-      navItems,
+      navItems: buildAdminNavItems('roles', showRolesMenu),
       contentHtml: `
         <h1 style="margin:0 0 8px; font-size:26px; color:#f8fafc;">Role Master</h1>
         <p style="margin:0 0 14px; color:#94a3b8; font-size:13px;">Create and manage roles for your users.</p>
@@ -97,15 +89,6 @@ export class RolesViews {
       ? `<p style="color:#fca5a5; margin:0 0 10px;">${this.escapeHtml(errorMessage)}</p>`
       : '';
 
-    const navItems: Array<{ label: string; href: string; isActive?: boolean }> = [
-      { label: 'Dashboard', href: '/dashboard' },
-      { label: 'Users', href: '/users' },
-      { label: 'FAQ', href: '/faqs' },
-    ];
-    if (showRolesMenu) {
-      navItems.push({ label: 'Roles', href: '/roles', isActive: true });
-    }
-
     const safeName = this.escapeHtml(role.name);
     const safeDescription = this.escapeHtml(role.description ?? '');
     const checked = role.canAccessBackend ? 'checked' : '';
@@ -113,7 +96,7 @@ export class RolesViews {
     return AdminLayout.render({
       title: 'Edit Role',
       pageTitle: 'Edit Role',
-      navItems,
+      navItems: buildAdminNavItems('roles', showRolesMenu),
       contentHtml: `
         <h1 style="margin:0 0 8px; font-size:26px; color:#f8fafc;">Edit Role</h1>
         <p style="margin:0 0 14px; color:#94a3b8; font-size:13px;">Update role settings and backend access.</p>

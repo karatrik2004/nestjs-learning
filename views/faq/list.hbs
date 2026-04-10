@@ -1,0 +1,41 @@
+<h1 class="admin-page-title">FAQ Management</h1>
+<p class="admin-page-desc">Create and manage frequently asked questions.</p>
+{{#if errorMessage}}
+<p class="admin-alert-error">{{errorMessage}}</p>
+{{/if}}
+<a class="btn btn-primary" href="/faqs/new" style="text-decoration:none; display:inline-flex; margin-bottom:14px;">Add FAQ</a>
+<div class="admin-table-panel">
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th class="col-num">SR</th>
+        <th>Question</th>
+        <th>Answer</th>
+        <th>Updated At</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#if faqRows.length}}
+      {{#each faqRows}}
+      <tr>
+        <td class="col-num">{{sr}}</td>
+        <td>{{question}}</td>
+        <td class="answer-preview"{{#if answerTitleAttr}} title="{{answerTitleAttr}}"{{/if}}>{{answerPreview}}</td>
+        <td>{{updatedAtLabel}}</td>
+        <td>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <a class="btn" href="/faqs/{{id}}/edit" style="text-decoration:none;">Edit</a>
+            <form method="post" action="/faqs/{{id}}/delete" style="display:inline;" onsubmit="return confirm('Delete this FAQ?');">
+              <button class="btn" type="submit">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {{/each}}
+      {{else}}
+      <tr><td colspan="5" style="padding:12px; color:#94a3b8;">No FAQs found.</td></tr>
+      {{/if}}
+    </tbody>
+  </table>
+</div>

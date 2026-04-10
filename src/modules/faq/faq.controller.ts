@@ -5,10 +5,13 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Render,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { isSuperAdminUser } from '../../common/auth/role-utils';
+import { buildAdminPageLocals } from '../../common/page/admin-page-locals';
 import {
   BACKEND_ACCESS_POLICY,
   Roles,
@@ -18,7 +21,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { JwtPayload } from '../auth/auth.service';
 import { FaqService } from './faq.service';
-import { FaqViews } from './faq.views';
+import { mapFaqsToListRows } from './faq.view-model';
 
 @Controller('faqs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,21 +30,42 @@ export class FaqController {
   constructor(private readonly faqService: FaqService) {}
 
   @Get()
-  async list(
-    @CurrentUser() user: JwtPayload | null,
-    @Res() res: Response,
-  ): Promise<void> {
+  @Render('faq/list')
+  async list(@CurrentUser() user: JwtPayload | null) {
     const faqs = await this.faqService.findAll();
-    res
-      .status(200)
-      .send(FaqViews.list(faqs, { showRolesMenu: this.isSuperAdmin(user) }));
+    const showRolesMenu = isSuperAdminUser(user);
+    return {
+      ...buildAdminPageLocals({
+        user,
+        showRolesMenu,
+        active: 'faq',
+        title: 'FAQ',
+        pageTitle: 'FAQ',
+      }),
+      faqRows: mapFaqsToListRows(faqs),
+      errorMessage: '',
+    };
   }
 
   @Get('new')
-  newForm(@CurrentUser() user: JwtPayload | null, @Res() res: Response): void {
-    res
-      .status(200)
-      .send(FaqViews.form('Create FAQ', '/faqs/create', undefined, this.isSuperAdmin(user)));
+  @Render('faq/form')
+  newForm(@CurrentUser() user: JwtPayload | null) {
+    const showRolesMenu = isSuperAdminUser(user);
+    return {
+      ...buildAdminPageLocals({
+        user,
+        showRolesMenu,
+        active: 'faq',
+        title: 'Create FAQ',
+        pageTitle: 'Create FAQ',
+      }),
+      formTitle: 'Create FAQ',
+      formDescription: 'Maintain FAQ content for frontend users.',
+      formAction: '/faqs/create',
+      questionValue: '',
+      answerValue: '',
+      errorMessage: '',
+    };
   }
 
   @Post('create')
@@ -52,21 +76,24 @@ export class FaqController {
   ): Promise<void> {
     const question = body.question?.trim() ?? '';
     const answer = body.answer?.trim() ?? '';
-    const showRolesMenu = this.isSuperAdmin(user);
+    const showRolesMenu = isSuperAdminUser(user);
 
     if (!question || !answer) {
-      res.status(400).send(
-        FaqViews.form(
-          'Create FAQ',
-          '/faqs/create',
-          {
-            question,
-            answer,
-            errorMessage: 'Question and answer are required.',
-          },
+      res.status(400).render('faq/form', {
+        ...buildAdminPageLocals({
+          user,
           showRolesMenu,
-        ),
-      );
+          active: 'faq',
+          title: 'Create FAQ',
+          pageTitle: 'Create FAQ',
+        }),
+        formTitle: 'Create FAQ',
+        formDescription: 'Maintain FAQ content for frontend users.',
+        formAction: '/faqs/create',
+        questionValue: question,
+        answerValue: answer,
+        errorMessage: 'Question and answer are required.',
+      });
       return;
     }
 
@@ -85,9 +112,22 @@ export class FaqController {
       res.status(404).send('FAQ not found');
       return;
     }
-    res
-      .status(200)
-      .send(FaqViews.form('Edit FAQ', `/faqs/${id}/update`, faq, this.isSuperAdmin(user)));
+    const showRolesMenu = isSuperAdminUser(user);
+    res.render('faq/form', {
+      ...buildAdminPageLocals({
+        user,
+        showRolesMenu,
+        active: 'faq',
+        title: 'Edit FAQ',
+        pageTitle: 'Edit FAQ',
+      }),
+      formTitle: 'Edit FAQ',
+      formDescription: 'Maintain FAQ content for frontend users.',
+      formAction: `/faqs/${id}/update`,
+      questionValue: faq.question,
+      answerValue: faq.answer ?? '',
+      errorMessage: '',
+    });
   }
 
   @Post(':id/update')
@@ -99,25 +139,32 @@ export class FaqController {
   ): Promise<void> {
     const question = body.question?.trim() ?? '';
     const answer = body.answer?.trim() ?? '';
-    const showRolesMenu = this.isSuperAdmin(user);
+    const showRolesMenu = isSuperAdminUser(user);
 
     if (!question || !answer) {
-      res.status(400).send(
-        FaqViews.form(
-          'Edit FAQ',
-          `/faqs/${id}/update`,
-          {
-            question,
-            answer,
-            errorMessage: 'Question and answer are required.',
-          },
+      res.status(400).render('faq/form', {
+        ...buildAdminPageLocals({
+          user,
           showRolesMenu,
-        ),
-      );
+          active: 'faq',
+          title: 'Edit FAQ',
+          pageTitle: 'Edit FAQ',
+        }),
+        formTitle: 'Edit FAQ',
+        formDescription: 'Maintain FAQ content for frontend users.',
+        formAction: `/faqs/${id}/update`,
+        questionValue: question,
+        answerValue: answer,
+        errorMessage: 'Question and answer are required.',
+      });
       return;
     }
 
-    await this.faqService.update(id, question, answer);
+    const updated = await this.faqService.update(id, question, answer);
+    if (!updated) {
+      res.status(404).send('FAQ not found');
+      return;
+    }
     res.redirect(303, '/faqs');
   }
 
@@ -126,12 +173,11 @@ export class FaqController {
     @Param('id', ParseIntPipe) id: number,
     @Res() res: Response,
   ): Promise<void> {
-    await this.faqService.delete(id);
+    const deleted = await this.faqService.delete(id);
+    if (!deleted) {
+      res.status(404).send('FAQ not found');
+      return;
+    }
     res.redirect(303, '/faqs');
   }
-
-  private isSuperAdmin(user: JwtPayload | null): boolean {
-    return (user?.role ?? '').trim().toLowerCase() === 'super admin';
-  }
 }
-

@@ -13,6 +13,7 @@ import {
   BACKEND_ACCESS_POLICY,
   Roles,
 } from '../../common/decorators/roles.decorator';
+import { isSuperAdminUser } from '../../common/auth/role-utils';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -32,7 +33,7 @@ export class RolesController {
     @CurrentUser() user: JwtPayload | null,
     @Res() res: Response,
   ): Promise<void> {
-    const showRolesMenu = this.isSuperAdmin(user);
+    const showRolesMenu = isSuperAdminUser(user);
     const roles = (await this.rolesService.findAll()).filter(
       (role) => role.name.trim().toLowerCase() !== 'super admin',
     );
@@ -46,7 +47,7 @@ export class RolesController {
     @Body() body: { name?: string; description?: string; canAccessBackend?: string },
     @Res() res: Response,
   ): Promise<void> {
-    const showRolesMenu = this.isSuperAdmin(user);
+    const showRolesMenu = isSuperAdminUser(user);
     const name = body.name?.trim() ?? '';
     if (!name) {
       const roles = (await this.rolesService.findAll()).filter(
@@ -96,7 +97,9 @@ export class RolesController {
       res.status(404).send('Role not found');
       return;
     }
-    res.status(200).send(RolesViews.form(role, undefined, this.isSuperAdmin(user)));
+    res
+      .status(200)
+      .send(RolesViews.form(role, undefined, isSuperAdminUser(user)));
   }
 
   @Post(':id/update')
@@ -107,7 +110,7 @@ export class RolesController {
     @Body() body: { name?: string; description?: string; canAccessBackend?: string },
     @Res() res: Response,
   ): Promise<void> {
-    const showRolesMenu = this.isSuperAdmin(user);
+    const showRolesMenu = isSuperAdminUser(user);
     const name = body.name?.trim() ?? '';
     const canAccessBackend = body.canAccessBackend === 'on';
     const existingRole = await this.rolesService.findById(id);
@@ -159,10 +162,6 @@ export class RolesController {
   ): Promise<void> {
     await this.rolesService.delete(id);
     res.redirect(303, '/roles');
-  }
-
-  private isSuperAdmin(user: JwtPayload | null): boolean {
-    return (user?.role ?? '').trim().toLowerCase() === 'super admin';
   }
 }
 

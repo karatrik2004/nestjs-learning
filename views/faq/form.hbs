@@ -1,0 +1,19 @@
+<h1 class="admin-page-title">{{formTitle}}</h1>
+<p class="admin-page-desc">{{formDescription}}</p>
+{{#if errorMessage}}
+<p class="admin-alert-error">{{errorMessage}}</p>
+{{/if}}
+<form method="post" action="{{formAction}}" class="admin-form">
+  <label class="admin-label">
+    Question *
+    <input class="admin-input" name="question" maxlength="255" value="{{questionValue}}" />
+  </label>
+  <label class="admin-label">
+    Answer *
+    <textarea class="admin-textarea" name="answer" rows="6">{{answerValue}}</textarea>
+  </label>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <button class="btn btn-primary" type="submit">Save</button>
+    <a class="btn" href="/faqs" style="text-decoration:none;">Cancel</a>
+  </div>
+</form>

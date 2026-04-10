@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{title}}</title>
+  <link rel="stylesheet" href="/css/admin-panel.css" />
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand" style="padding: 6px 10px;">Admin Panel</div>
+      <div class="nav-title">Navigation</div>
+      <nav class="nav">{{> admin-nav}}</nav>
+      <div class="nav-title">Account</div>
+      <nav class="nav">
+        <a href="/logout"><span class="dot" style="background:#fca5a5; box-shadow:0 0 0 3px rgba(252,165,165,0.14);"></span>Logout</a>
+      </nav>
+    </aside>
+
+    <header>
+      <div class="header-left">
+        <div class="brand">{{pageTitle}}</div>
+        <div class="user-pill" title="{{userLabel}}">
+          <span class="avatar"></span>
+          <span>{{userLabel}}</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a class="btn" href="/dashboard">Dashboard</a>
+        <a class="btn" href="/users">Users</a>
+        <a class="btn btn-primary" href="/logout">Logout</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="content">
+        {{{body}}}
+      </div>
+    </main>
+
+    <footer>
+      <span>{{footerLeft}}</span>
+      <span>{{footerRight}}</span>
+    </footer>
+  </div>
+</body>
+</html>

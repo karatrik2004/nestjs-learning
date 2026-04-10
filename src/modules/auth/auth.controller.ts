@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Logger,
   Post,
   Req,
   Res,
@@ -12,25 +13,29 @@ import { Throttle } from '@nestjs/throttler';
 import { ApiResponseEnvelopeInterceptor } from '../../common/interceptors/api-response-envelope.interceptor';
 import { SanitizeUserResponseInterceptor } from '../../common/interceptors/sanitize-user-response.interceptor';
 import { TrimBodyPipe } from '../../common/pipes/trim-body.pipe';
+import { AuthCookieService } from './auth-cookie.service';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 
 @Controller()
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  private readonly logger = new Logger(AuthController.name);
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly authCookies: AuthCookieService,
+  ) {}
 
   @Get()
   async showLogin(@Req() req: Request, @Res() res: Response): Promise<void> {
-    console.log('[AUTH][STEP 1] GET / requested');
+    this.logger.log('GET / requested');
     const hasSession = await this.hasValidSession(req, res);
     if (hasSession) {
-      console.log(
-        '[AUTH][STEP 2] Active session found, redirecting to /dashboard',
-      );
+      this.logVerbose('Active session found, redirecting to /dashboard');
       res.redirect(302, '/dashboard');
       return;
     }
-    console.log('[AUTH][STEP 2] No active session, rendering login page');
+    this.logVerbose('No active session, rendering login page');
     res.status(200).send(this.renderLoginPage());
   }
 
@@ -81,8 +86,7 @@ export class AuthController {
     @Body(TrimBodyPipe) body: LoginDto,
     @Res() res: Response,
   ): Promise<void> {
-    console.log('res', res);
-    console.log('[AUTH][STEP 3] POST /login received');
+    this.logger.log('POST /login received');
     const email = body.email.trim();
     const password = body.password;
 
@@ -91,7 +95,7 @@ export class AuthController {
       password,
     );
     if (!user) {
-      console.log('[AUTH][STEP 5] Login failed: invalid credentials');
+      this.logger.warn('Login failed: invalid credentials');
       res
         .status(401)
         .send(this.renderLoginPage('Invalid email or password.', email));
@@ -113,9 +117,8 @@ export class AuthController {
     }
 
     const tokens = await this.authService.generateTokens(user);
-    console.log('[AUTH][STEP 6] Tokens generated, setting cookies');
-    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-    console.log('[AUTH][STEP 7] Login success, redirecting to /dashboard');
+    this.authCookies.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+    this.logVerbose('Login success, redirecting to /dashboard');
     res.redirect(303, '/dashboard');
   }
 
@@ -138,7 +141,7 @@ export class AuthController {
     }
 
     const tokens = await this.authService.generateTokens(user);
-    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+    this.authCookies.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     return {
       message: 'App login success',
       user: {
@@ -159,44 +162,40 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
-    console.log('[AUTH][STEP R1] POST /refresh received');
+    this.logger.log('POST /refresh received');
     const refreshToken = this.getCookieValue(req, 'refreshToken');
     if (!refreshToken) {
-      console.log('[AUTH][STEP R2] Refresh failed: no refresh token cookie');
+      this.logger.warn('Refresh failed: no refresh token cookie');
       res.status(401);
       return { message: 'Unauthorized' };
     }
 
     const tokens = await this.authService.refreshTokens(refreshToken);
     if (!tokens) {
-      console.log('[AUTH][STEP R2] Refresh failed: token invalid or expired');
-      this.clearAuthCookies(res);
+      this.logger.warn('Refresh failed: token invalid or expired');
+      this.authCookies.clearAuthCookies(res);
       res.status(401);
       return { message: 'Unauthorized' };
     }
 
-    console.log('[AUTH][STEP R3] Refresh success, rotating cookies');
-    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+    this.authCookies.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     return { message: 'Token refreshed' };
   }
 
   @Get('logout')
   async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
-    console.log('[AUTH][STEP L1] GET /logout received');
+    this.logger.log('GET /logout received');
     const refreshToken = this.getCookieValue(req, 'refreshToken');
     if (refreshToken) {
       const userId =
         await this.authService.getUserIdFromRefreshToken(refreshToken);
       if (userId) {
-        console.log(
-          `[AUTH][STEP L2] Clearing refresh token hash for userId=${userId}`,
-        );
+        this.logVerbose(`Clearing refresh token hash for userId=${userId}`);
         await this.authService.clearRefreshToken(userId);
       }
     }
 
-    console.log('[AUTH][STEP L3] Clearing auth cookies and redirecting to /');
-    this.clearAuthCookies(res);
+    this.authCookies.clearAuthCookies(res);
     res.redirect(302, '/');
   }
 
@@ -356,7 +355,7 @@ export class AuthController {
   }
 
   private async hasValidSession(req: Request, res: Response): Promise<boolean> {
-    console.log('[AUTH][SESSION] Checking session from cookies');
+    this.logVerbose('Checking session from cookies');
     const accessToken = this.getCookieValue(req, 'accessToken');
     if (accessToken) {
       const accessPayload =
@@ -366,25 +365,23 @@ export class AuthController {
           accessPayload.role,
         );
         if (canLoginBackend) {
-          console.log('[AUTH][SESSION] Access token valid for admin panel');
+          this.logVerbose('Access token valid for admin panel');
           return true;
         }
-        console.log('[AUTH][SESSION] Access token valid but role is not admin');
+        this.logVerbose('Access token valid but role lacks backend access');
       }
-      console.log('[AUTH][SESSION] Access token invalid/expired');
+      this.logVerbose('Access token invalid/expired');
     }
 
-    // Keep login-page session check lightweight.
-    // Refresh flow remains in JwtAuthGuard (protected routes) and POST /refresh.
     const refreshToken = this.getCookieValue(req, 'refreshToken');
     if (refreshToken) {
-      console.log(
-        '[AUTH][SESSION] Refresh token exists, defer refresh to guard/refresh endpoint',
+      this.logVerbose(
+        'Refresh token exists, defer refresh to guard/refresh endpoint',
       );
     } else {
-      console.log('[AUTH][SESSION] No refresh token cookie');
+      this.logVerbose('No refresh token cookie');
     }
-    this.clearAuthCookies(res);
+    this.authCookies.clearAuthCookies(res);
     return false;
   }
 
@@ -401,30 +398,7 @@ export class AuthController {
     return null;
   }
 
-  private setAuthCookies(
-    res: Response,
-    accessToken: string,
-    refreshToken: string,
-  ): void {
-    const isProd = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
-    const sameSite = isProd ? 'strict' : 'lax';
-
-    res.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite,
-      maxAge: 15 * 60 * 1000,
-    });
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-  }
-
-  private clearAuthCookies(res: Response): void {
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
+  private logVerbose(message: string): void {
+    this.logger.debug(message);
   }
 }

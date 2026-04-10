@@ -1,5 +1,6 @@
 import type { User } from './user.entity';
 import { AdminLayout } from '../../common/views/admin-layout';
+import { buildAdminNavItems } from '../../common/views/admin-nav-items';
 import type { UsersListFilters } from './users.service';
 
 type FormData = {
@@ -63,19 +64,10 @@ export class UsersViews {
       )
       .join('');
 
-    const navItems = [
-      { label: 'Dashboard', href: '/dashboard' },
-      { label: 'Users', href: '/users', isActive: true },
-      { label: 'FAQ', href: '/faqs' },
-    ];
-    if (showRolesMenu) {
-      navItems.push({ label: 'Roles', href: '/roles' });
-    }
-
     return AdminLayout.render({
       title: 'Users',
       pageTitle: 'Users',
-      navItems,
+      navItems: buildAdminNavItems('users', showRolesMenu),
       contentHtml: `
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
           <div>
@@ -154,19 +146,10 @@ export class UsersViews {
         )}" alt="profile" style="width:64px;height:64px;object-fit:cover;border-radius:50%;border:1px solid rgba(148,163,184,0.18);" />`
       : '';
 
-    const navItems = [
-      { label: 'Dashboard', href: '/dashboard' },
-      { label: 'Users', href: '/users', isActive: true },
-      { label: 'FAQ', href: '/faqs' },
-    ];
-    if (showRolesMenu) {
-      navItems.push({ label: 'Roles', href: '/roles' });
-    }
-
     return AdminLayout.render({
       title,
       pageTitle: isEdit ? 'Edit User' : 'Create User',
-      navItems,
+      navItems: buildAdminNavItems('users', showRolesMenu),
       contentHtml: `
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
           <div>

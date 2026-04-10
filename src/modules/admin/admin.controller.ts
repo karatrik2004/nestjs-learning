@@ -7,6 +7,7 @@ import {
 } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { buildAdminNavItems } from '../../common/views/admin-nav-items';
 import { AdminLayout } from '../../common/views/admin-layout';
 import type { JwtPayload } from '../auth/auth.service';
 import { UsersService } from '../users/users.service';
@@ -43,12 +44,7 @@ export class AdminController {
         title: 'Admin Dashboard',
         pageTitle: 'Dashboard',
         userLabel: `Signed in as ${userEmail} (${userRole})`,
-        navItems: [
-          { label: 'Dashboard', href: '/dashboard', isActive: true },
-          { label: 'Users', href: '/users' },
-          { label: 'FAQ', href: '/faqs' },
-          ...(showRolesMenu ? [{ label: 'Roles', href: '/roles' }] : []),
-        ],
+        navItems: buildAdminNavItems('dashboard', showRolesMenu),
         contentHtml: `
           <h1 style="margin:0 0 8px; font-size:26px; color:#f8fafc;">Welcome back</h1>
           <p style="margin:0 0 18px; color:#94a3b8; font-size:14px;">You are signed in successfully. Here's current users snapshot.</p>
