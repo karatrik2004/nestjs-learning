@@ -3,7 +3,8 @@
 {{#if errorMessage}}
 <p class="admin-alert-error">{{errorMessage}}</p>
 {{/if}}
-<a class="btn btn-primary" href="/faqs/new" style="text-decoration:none; display:inline-flex; margin-bottom:14px;">Add FAQ</a>
+<a class="btn btn-primary" href="/faqs/new" style="text-decoration:none; display:inline-flex; margin-bottom:14px;">Add
+  FAQ</a>
 <div class="admin-table-panel">
   <table class="admin-table">
     <thead>
@@ -21,12 +22,13 @@
       <tr>
         <td class="col-num">{{sr}}</td>
         <td>{{question}}</td>
-        <td class="answer-preview"{{#if answerTitleAttr}} title="{{answerTitleAttr}}"{{/if}}>{{answerPreview}}</td>
+        <td class="answer-preview" {{#if answerTitleAttr}} title="{{answerTitleAttr}}" {{/if}}>{{answerPreview}}</td>
         <td>{{updatedAtLabel}}</td>
         <td>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <a class="btn" href="/faqs/{{id}}/edit" style="text-decoration:none;">Edit</a>
-            <form method="post" action="/faqs/{{id}}/delete" style="display:inline;" onsubmit="return confirm('Delete this FAQ?');">
+            <form method="post" action="/faqs/{{id}}/delete" style="display:inline;"
+              onsubmit="return confirm('Delete this FAQ?');">
               <button class="btn" type="submit">Delete</button>
             </form>
           </div>
@@ -34,7 +36,9 @@
       </tr>
       {{/each}}
       {{else}}
-      <tr><td colspan="5" style="padding:12px; color:#94a3b8;">No FAQs found.</td></tr>
+      <tr>
+        <td colspan="5" style="padding:12px; color:#94a3b8;">No FAQs found.</td>
+      </tr>
       {{/if}}
     </tbody>
   </table>

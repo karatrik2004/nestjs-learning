@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
   Post,
   Res,
   UseGuards,
@@ -89,7 +88,7 @@ export class RolesController {
   @Roles('super admin')
   async editForm(
     @CurrentUser() user: JwtPayload | null,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Res() res: Response,
   ): Promise<void> {
     const role = await this.rolesService.findById(id);
@@ -106,7 +105,7 @@ export class RolesController {
   @Roles('super admin')
   async update(
     @CurrentUser() user: JwtPayload | null,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body() body: { name?: string; description?: string; canAccessBackend?: string },
     @Res() res: Response,
   ): Promise<void> {
@@ -157,7 +156,7 @@ export class RolesController {
   @Post(':id/delete')
   @Roles('super admin')
   async delete(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Res() res: Response,
   ): Promise<void> {
     await this.rolesService.delete(id);

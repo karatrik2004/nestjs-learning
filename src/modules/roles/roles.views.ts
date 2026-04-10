@@ -1,10 +1,10 @@
 import { AdminLayout } from '../../common/views/admin-layout';
 import { buildAdminNavItems } from '../../common/views/admin-nav-items';
-import type { Role } from './role.entity';
+import type { RoleRecord } from './role.types';
 
 export class RolesViews {
   static list(
-    roles: Role[],
+    roles: RoleRecord[],
     errorMessage?: string,
     showRolesMenu = true,
   ): string {
@@ -20,8 +20,8 @@ export class RolesViews {
             <td style="padding:10px 12px;">${this.formatDate(role.updatedAt)}</td>
             <td style="padding:10px 12px;">
               <div style="display:flex; gap:8px; align-items:center;">
-                <a class="btn" href="/roles/${role.id}/edit" style="text-decoration:none;">Edit</a>
-                <form method="post" action="/roles/${role.id}/delete" style="display:inline;" onsubmit="return confirm('Delete this role?');">
+                <a class="btn" href="/roles/${role._id}/edit" style="text-decoration:none;">Edit</a>
+                <form method="post" action="/roles/${role._id}/delete" style="display:inline;" onsubmit="return confirm('Delete this role?');">
                   <button class="btn" type="submit">Delete</button>
                 </form>
               </div>
@@ -81,7 +81,7 @@ export class RolesViews {
   }
 
   static form(
-    role: Role,
+    role: RoleRecord,
     errorMessage?: string,
     showRolesMenu = true,
   ): string {
@@ -101,7 +101,7 @@ export class RolesViews {
         <h1 style="margin:0 0 8px; font-size:26px; color:#f8fafc;">Edit Role</h1>
         <p style="margin:0 0 14px; color:#94a3b8; font-size:13px;">Update role settings and backend access.</p>
         ${errorBlock}
-        <form method="post" action="/roles/${role.id}/update" style="display:grid; gap:10px; max-width:560px;">
+        <form method="post" action="/roles/${role._id}/update" style="display:grid; gap:10px; max-width:560px;">
           <label style="display:grid; gap:6px; color:#cbd5e1; font-size:13px;">
             Role name *
             <input name="name" value="${safeName}" required maxlength="50" style="height:40px; border-radius:10px; border:1px solid rgba(148,163,184,0.22); background: rgba(2,6,23,0.25); color:#e2e8f0; padding:0 12px;" />

@@ -338,7 +338,7 @@ export class AuthController {
               />
               <button type="submit">Login</button>
             </form>
-            <p class="footer-note">NestJS + PostgreSQL demo authentication</p>
+            <p class="footer-note">NestJS + MongoDB demo authentication</p>
           </div>
         </body>
       </html>

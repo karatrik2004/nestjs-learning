@@ -1,8 +1,8 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { CsrfProtectionMiddleware } from './common/middleware/csrf-protection.middleware';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { AuthModule } from './modules/auth';
@@ -37,22 +37,11 @@ import { UsersModule } from './modules/users/users.module';
       }),
       inject: [ConfigService],
     }),
-    TypeOrmModule.forRootAsync({
+    MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => {
-        const nodeEnv = (config.get<string>('NODE_ENV') ?? 'development')
-          .toLowerCase();
-        return {
-          type: 'postgres' as const,
-          host: config.get<string>('DB_HOST', 'localhost'),
-          port: Number(config.get<string>('DB_PORT', '5432')),
-          username: config.get<string>('DB_USERNAME', 'postgres'),
-          password: config.get<string>('DB_PASSWORD', 'postgres'),
-          database: config.get<string>('DB_NAME', 'nestjs_learning'),
-          autoLoadEntities: true,
-          synchronize: nodeEnv !== 'production',
-        };
-      },
+      useFactory: (config: ConfigService) => ({
+        uri: config.getOrThrow<string>('MONGO_URI'),
+      }),
       inject: [ConfigService],
     }),
     AuthModule,

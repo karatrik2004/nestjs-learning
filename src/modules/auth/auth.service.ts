@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectModel } from '@nestjs/mongoose';
 import { compare, hash } from 'bcrypt';
-import { Repository } from 'typeorm';
-import { Role } from '../roles/role.entity';
-import { User } from '../users/user.entity';
+import { Model } from 'mongoose';
+import { RoleDocumentModel } from '../roles/role.schema';
+import { UserDocumentModel } from '../users/user.schema';
+import type { UserRecord } from '../users/user.types';
 
 type AuthTokens = {
   accessToken: string;
@@ -13,7 +14,7 @@ type AuthTokens = {
 };
 
 export type JwtPayload = {
-  sub: number;
+  sub: string;
   email: string;
   role: string;
   type: 'access' | 'refresh';
@@ -28,10 +29,10 @@ export class AuthService {
   >();
 
   constructor(
-    @InjectRepository(User)
-    private readonly usersRepository: Repository<User>,
-    @InjectRepository(Role)
-    private readonly rolesRepository: Repository<Role>,
+    @InjectModel(RoleDocumentModel.name)
+    private readonly rolesModel: Model<RoleDocumentModel>,
+    @InjectModel(UserDocumentModel.name)
+    private readonly usersModel: Model<UserDocumentModel>,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
   ) {}
@@ -39,12 +40,9 @@ export class AuthService {
   async validateUserCredentials(
     email: string,
     password: string,
-  ): Promise<User | null> {
+  ): Promise<UserRecord | null> {
     this.logger.debug(`Validating credentials for email=${email}`);
-    const user = await this.usersRepository.findOne({
-      where: { email },
-      relations: { roleMaster: true },
-    });
+    const user = await this.usersModel.findOne({ email }).lean().exec();
 
     if (!user) {
       this.logger.debug('User not found');
@@ -55,7 +53,10 @@ export class AuthService {
     this.logger.debug(
       `Password comparison result=${isMatch ? 'MATCH' : 'NO_MATCH'}`,
     );
-    return isMatch ? user : null;
+    if (!isMatch) {
+      return null;
+    }
+    return this.toUserRecord(user);
   }
 
   async isBackendRole(role: string): Promise<boolean> {
@@ -64,16 +65,17 @@ export class AuthService {
       return false;
     }
 
-    const roles = await this.rolesRepository.find({
-      select: { name: true, canAccessBackend: true },
-    });
+    const roles = await this.rolesModel
+      .find({ deletedAt: null }, { name: 1, canAccessBackend: 1 })
+      .lean()
+      .exec();
     const matchedRole = roles.find(
       (existingRole) => this.normalizeRoleName(existingRole.name) === normalized,
     );
     return Boolean(matchedRole?.canAccessBackend);
   }
 
-  async generateTokens(user: User): Promise<AuthTokens> {
+  async generateTokens(user: UserRecord): Promise<AuthTokens> {
     this.logger.debug(`Generating tokens for userId=${user.id}`);
     const roleName = await this.resolveRoleName(user);
     const payload = {
@@ -110,13 +112,17 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  async storeRefreshToken(userId: number, refreshToken: string): Promise<void> {
+  async storeRefreshToken(userId: string, refreshToken: string): Promise<void> {
     const refreshTokenHash = await hash(refreshToken, 10);
-    await this.usersRepository.update(userId, { refreshTokenHash });
+    await this.usersModel
+      .updateOne({ _id: userId }, { $set: { refreshTokenHash } })
+      .exec();
   }
 
-  async clearRefreshToken(userId: number): Promise<void> {
-    await this.usersRepository.update(userId, { refreshTokenHash: null });
+  async clearRefreshToken(userId: string): Promise<void> {
+    await this.usersModel
+      .updateOne({ _id: userId }, { $set: { refreshTokenHash: null } })
+      .exec();
   }
 
   async verifyAccessToken(token: string): Promise<JwtPayload | null> {
@@ -165,10 +171,7 @@ export class AuthService {
         return null;
       }
 
-      const user = await this.usersRepository.findOne({
-        where: { id: payload.sub },
-        relations: { roleMaster: true },
-      });
+      const user = await this.usersModel.findOne({ _id: payload.sub }).lean().exec();
 
       if (!user || !user.refreshTokenHash) {
         this.logger.debug('User missing or no refresh hash in DB');
@@ -185,14 +188,14 @@ export class AuthService {
       }
 
       this.logger.debug('Refresh token valid, issuing new tokens');
-      return this.generateTokens(user);
+      return this.generateTokens(this.toUserRecord(user));
     } catch {
       this.logger.debug('Refresh token verification threw error');
       return null;
     }
   }
 
-  async getUserIdFromRefreshToken(token: string): Promise<number | null> {
+  async getUserIdFromRefreshToken(token: string): Promise<string | null> {
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
         secret: this.config.get<string>('JWT_REFRESH_SECRET', 'refresh-secret'),
@@ -207,20 +210,47 @@ export class AuthService {
     return value.trim().toLowerCase().replaceAll('_', ' ').replace(/\s+/g, ' ');
   }
 
-  async getUserRoleName(user: User): Promise<string> {
+  async getUserRoleName(user: UserRecord): Promise<string> {
     return this.resolveRoleName(user);
   }
 
-  private async resolveRoleName(user: User): Promise<string> {
+  private async resolveRoleName(user: UserRecord): Promise<string> {
     if (user.roleMaster?.name) {
       return user.roleMaster.name;
     }
     if (user.roleId) {
-      const role = await this.rolesRepository.findOne({ where: { id: user.roleId } });
+      const role = await this.rolesModel
+        .findOne({ _id: user.roleId, deletedAt: null }, { name: 1 })
+        .lean()
+        .exec();
       if (role?.name) {
         return role.name;
       }
     }
     return 'unknown';
+  }
+
+  private toUserRecord(user: {
+    _id: unknown;
+    email: string;
+    password: string;
+    name?: string | null;
+    phone?: string | null;
+    profileImage?: string | null;
+    roleId?: string | null;
+    refreshTokenHash?: string | null;
+    roleMaster?: { name: string } | null;
+  }): UserRecord {
+    return {
+      id: String(user._id),
+      email: user.email,
+      password: user.password,
+      name: user.name ?? null,
+      phone: user.phone ?? null,
+      profileImage: user.profileImage ?? null,
+      roleId: user.roleId ?? null,
+      refreshTokenHash: user.refreshTokenHash ?? null,
+      roleMaster: user.roleMaster ?? null,
+    };
   }
 }

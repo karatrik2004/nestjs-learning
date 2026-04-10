@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
   Post,
   Query,
   Res,
@@ -111,7 +110,7 @@ export class UsersController {
             name: this.asString(body.name),
             email: this.asString(body.email),
             phone: this.asString(body.phone),
-            roleId: this.asNumber(body.roleId),
+            roleId: this.asRoleId(body.roleId),
             roleOptions,
             errorMessage: profileImageError,
           },
@@ -188,7 +187,7 @@ export class UsersController {
   @Get(':id/edit')
   async editForm(
     @CurrentUser() currentUser: JwtPayload | null,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Res() res: Response,
   ): Promise<void> {
     const user = await this.usersService.findById(id);
@@ -204,7 +203,7 @@ export class UsersController {
         email: user.email,
         phone: user.phone ?? '',
         profileImage: user.profileImage ?? '',
-        roleId: user.roleId ?? 0,
+        roleId: user.roleId ?? '',
         roleOptions,
       }, isSuperAdminUser(currentUser)),
     );
@@ -218,7 +217,7 @@ export class UsersController {
   )
   async update(
     @CurrentUser() user: JwtPayload | null,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body(TrimBodyPipe) body: Record<string, unknown>,
     @Res() res: Response,
     @UploadedFile() profileImage: UploadedProfileImage | undefined,
@@ -238,7 +237,7 @@ export class UsersController {
             email: this.asString(body.email),
             phone: this.asString(body.phone),
             profileImage: existingUser?.profileImage ?? '',
-            roleId: this.asNumber(body.roleId),
+            roleId: this.asRoleId(body.roleId),
             roleOptions,
             errorMessage: profileImageError,
           },
@@ -329,7 +328,7 @@ export class UsersController {
 
   @Post(':id/delete')
   async delete(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Res() res: Response,
   ): Promise<void> {
     await this.usersService.delete(id);
@@ -342,7 +341,7 @@ export class UsersController {
       name: this.asString(body.name),
       email: this.asString(body.email),
       phone: this.asString(body.phone),
-      roleId: this.asNumber(body.roleId),
+      roleId: this.asRoleId(body.roleId),
       password: this.asString(body.password),
     });
   }
@@ -352,7 +351,7 @@ export class UsersController {
       name: this.asString(body.name),
       email: this.asString(body.email),
       phone: this.asString(body.phone),
-      roleId: this.asNumber(body.roleId),
+      roleId: this.asRoleId(body.roleId),
       password: this.asString(body.password),
     });
   }
@@ -377,21 +376,18 @@ export class UsersController {
     return typeof value === 'string' ? value : undefined;
   }
 
-  private asNumber(value: unknown): number | undefined {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
+  private asRoleId(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
     }
-    if (typeof value === 'string' && value.trim() !== '') {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : undefined;
-    }
-    return undefined;
+    const normalized = value.trim();
+    return normalized === '' ? undefined : normalized;
   }
 
-  private async getRoleOptions(): Promise<Array<{ id: number; name: string }>> {
+  private async getRoleOptions(): Promise<Array<{ _id: string; name: string }>> {
     const roles = await this.rolesService.findAll();
     return roles
-      .map((role) => ({ id: role.id, name: role.name?.trim() ?? '' }))
+      .map((role) => ({ _id: role._id, name: role.name?.trim() ?? '' }))
       .filter(
         (role) =>
           role.name !== '' && role.name.toLowerCase() !== 'super admin',

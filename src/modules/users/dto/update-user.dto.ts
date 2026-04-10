@@ -1,11 +1,10 @@
 import {
   IsEmail,
-  IsInt,
+  IsMongoId,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
-  Min,
 } from 'class-validator';
 
 export class UpdateUserDto {
@@ -22,9 +21,8 @@ export class UpdateUserDto {
   @MaxLength(20)
   phone?: string;
 
-  @IsInt()
-  @Min(1)
-  roleId: number;
+  @IsMongoId()
+  roleId: string;
 
   @IsOptional()
   @IsString()

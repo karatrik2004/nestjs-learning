@@ -1,4 +1,4 @@
-import type { User } from './user.entity';
+import type { UserRecord } from './user.types';
 import { AdminLayout } from '../../common/views/admin-layout';
 import { buildAdminNavItems } from '../../common/views/admin-nav-items';
 import type { UsersListFilters } from './users.service';
@@ -8,15 +8,15 @@ type FormData = {
   email?: string;
   phone?: string;
   profileImage?: string;
-  roleId?: number;
-  roleOptions?: Array<{ id: number; name: string }>;
+  roleId?: string;
+  roleOptions?: Array<{ _id: string; name: string }>;
   errorMessage?: string;
   fieldErrors?: Record<string, string>;
 };
 
 export class UsersViews {
   static list(
-    users: User[],
+    users: UserRecord[],
     filters?: UsersListFilters,
     showRolesMenu = true,
   ): string {
@@ -131,13 +131,13 @@ export class UsersViews {
     const safeName = this.escapeHtml(data?.name ?? '');
     const safeEmail = this.escapeHtml(data?.email ?? '');
     const safePhone = this.escapeHtml(data?.phone ?? '');
-    const selectedRoleId = data?.roleId ?? 0;
+    const selectedRoleId = data?.roleId ?? '';
     const roleOptions = data?.roleOptions ?? [];
     const roleOptionsHtml = roleOptions
       .map((role) => {
-        const isSelected = selectedRoleId === role.id;
+        const isSelected = selectedRoleId === role._id;
         const safeLabel = this.escapeHtml(role.name);
-        return `<option value="${role.id}" ${isSelected ? 'selected' : ''}>${safeLabel}</option>`;
+        return `<option value="${role._id}" ${isSelected ? 'selected' : ''}>${safeLabel}</option>`;
       })
       .join('');
     const imagePreview = data?.profileImage

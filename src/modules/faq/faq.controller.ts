@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
   Post,
   Render,
   Res,
@@ -19,6 +18,7 @@ import {
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { TrimBodyPipe } from '../../common/pipes/trim-body.pipe';
 import type { JwtPayload } from '../auth/auth.service';
 import { FaqService } from './faq.service';
 import { mapFaqsToListRows } from './faq.view-model';
@@ -27,13 +27,14 @@ import { mapFaqsToListRows } from './faq.view-model';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(BACKEND_ACCESS_POLICY)
 export class FaqController {
-  constructor(private readonly faqService: FaqService) {}
+  constructor(private readonly faqService: FaqService) { }
 
   @Get()
   @Render('faq/list')
   async list(@CurrentUser() user: JwtPayload | null) {
     const faqs = await this.faqService.findAll();
     const showRolesMenu = isSuperAdminUser(user);
+  
     return {
       ...buildAdminPageLocals({
         user,
@@ -71,7 +72,7 @@ export class FaqController {
   @Post('create')
   async create(
     @CurrentUser() user: JwtPayload | null,
-    @Body() body: { question?: string; answer?: string },
+    @Body(TrimBodyPipe) body: { question?: string; answer?: string },
     @Res() res: Response,
   ): Promise<void> {
     const question = body.question?.trim() ?? '';
@@ -96,6 +97,24 @@ export class FaqController {
       });
       return;
     }
+    if (question.length > 255) {
+      res.status(400).render('faq/form', {
+        ...buildAdminPageLocals({
+          user,
+          showRolesMenu,
+          active: 'faq',
+          title: 'Create FAQ',
+          pageTitle: 'Create FAQ',
+        }),
+        formTitle: 'Create FAQ',
+        formDescription: 'Maintain FAQ content for frontend users.',
+        formAction: '/faqs/create',
+        questionValue: question,
+        answerValue: answer,
+        errorMessage: 'Question must be 255 characters or fewer.',
+      });
+      return;
+    }
 
     await this.faqService.create(question, answer);
     res.redirect(303, '/faqs');
@@ -104,7 +123,7 @@ export class FaqController {
   @Get(':id/edit')
   async editForm(
     @CurrentUser() user: JwtPayload | null,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Res() res: Response,
   ): Promise<void> {
     const faq = await this.faqService.findById(id);
@@ -133,8 +152,8 @@ export class FaqController {
   @Post(':id/update')
   async update(
     @CurrentUser() user: JwtPayload | null,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: { question?: string; answer?: string },
+    @Param('id') id: string,
+    @Body(TrimBodyPipe) body: { question?: string; answer?: string },
     @Res() res: Response,
   ): Promise<void> {
     const question = body.question?.trim() ?? '';
@@ -159,6 +178,24 @@ export class FaqController {
       });
       return;
     }
+    if (question.length > 255) {
+      res.status(400).render('faq/form', {
+        ...buildAdminPageLocals({
+          user,
+          showRolesMenu,
+          active: 'faq',
+          title: 'Edit FAQ',
+          pageTitle: 'Edit FAQ',
+        }),
+        formTitle: 'Edit FAQ',
+        formDescription: 'Maintain FAQ content for frontend users.',
+        formAction: `/faqs/${id}/update`,
+        questionValue: question,
+        answerValue: answer,
+        errorMessage: 'Question must be 255 characters or fewer.',
+      });
+      return;
+    }
 
     const updated = await this.faqService.update(id, question, answer);
     if (!updated) {
@@ -170,7 +207,7 @@ export class FaqController {
 
   @Post(':id/delete')
   async delete(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Res() res: Response,
   ): Promise<void> {
     const deleted = await this.faqService.delete(id);

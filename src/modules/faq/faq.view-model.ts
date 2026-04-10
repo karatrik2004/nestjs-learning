@@ -1,9 +1,9 @@
-import type { Faq } from './faq.entity';
+import type { FaqRecord } from './faq.types';
 
 const ANSWER_LIST_PREVIEW_CHARS = 140;
 
 export type FaqListRowVm = {
-  id: number;
+  id: string;
   sr: number;
   question: string;
   answerPreview: string;
@@ -11,7 +11,7 @@ export type FaqListRowVm = {
   updatedAtLabel: string;
 };
 
-export function mapFaqsToListRows(faqs: Faq[]): FaqListRowVm[] {
+export function mapFaqsToListRows(faqs: FaqRecord[]): FaqListRowVm[] {
   return faqs.map((faq, index) => {
     const rawAnswer = faq.answer ?? '';
     const normalized = rawAnswer.replace(/\s+/g, ' ').trim();
