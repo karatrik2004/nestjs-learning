@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth';
 import { AdminModule } from './modules/admin/admin.module';
 import { FaqModule } from './modules/faq/faq.module';
 import { RolesModule } from './modules/roles/roles.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -48,6 +49,7 @@ import { UsersModule } from './modules/users/users.module';
     AdminModule,
     FaqModule,
     RolesModule,
+    SettingsModule,
     UsersModule,
   ],
 })

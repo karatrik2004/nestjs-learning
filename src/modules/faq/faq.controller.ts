@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Render,
   Res,
   UseGuards,
@@ -20,21 +21,54 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { TrimBodyPipe } from '../../common/pipes/trim-body.pipe';
 import type { JwtPayload } from '../auth/auth.service';
-import { FaqService } from './faq.service';
+import { SettingsService } from '../settings/settings.service';
+import {
+  FaqService,
+  type FaqSortDirection,
+  type FaqSortField,
+} from './faq.service';
 import { mapFaqsToListRows } from './faq.view-model';
 
 @Controller('faqs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(BACKEND_ACCESS_POLICY)
 export class FaqController {
-  constructor(private readonly faqService: FaqService) { }
+  constructor(
+    private readonly faqService: FaqService,
+    private readonly settingsService: SettingsService,
+  ) { }
 
   @Get()
   @Render('faq/list')
-  async list(@CurrentUser() user: JwtPayload | null) {
-    const faqs = await this.faqService.findAll();
+  async list(
+    @CurrentUser() user: JwtPayload | null,
+    @Query('page') pageQuery?: string,
+    @Query('search') searchQuery?: string,
+    @Query('sortBy') sortByQuery?: string,
+    @Query('sortDir') sortDirQuery?: string,
+  ) {
+
+    const settings = await this.settingsService.getSettings();
+
+    const parsedPage = Number(pageQuery);
+    const page = Number.isFinite(parsedPage) ? parsedPage : 1;
+    const search = searchQuery?.trim() ?? '';
+    const sortBy = this.parseSortField(sortByQuery);
+    const sortDir = this.parseSortDirection(sortDirQuery);
+
+    const faqPage = await this.faqService.findPage(
+      page,
+      settings.defaultPageSize,
+      search,
+      sortBy,
+      sortDir,
+    );
+   
     const showRolesMenu = isSuperAdminUser(user);
-  
+
+    const prevPage = faqPage.page > 1 ? faqPage.page - 1 : null;
+    const nextPage = faqPage.page < faqPage.totalPages ? faqPage.page + 1 : null;
+
     return {
       ...buildAdminPageLocals({
         user,
@@ -43,9 +77,65 @@ export class FaqController {
         title: 'FAQ',
         pageTitle: 'FAQ',
       }),
-      faqRows: mapFaqsToListRows(faqs),
+      faqRows: mapFaqsToListRows(
+        faqPage.items,
+        (faqPage.page - 1) * faqPage.pageSize + 1,
+      ),
+      currentPage: faqPage.page,
+      totalPages: faqPage.totalPages,
+      totalItems: faqPage.totalItems,
+      searchValue: search,
+      currentSortBy: sortBy,
+      currentSortDir: sortDir,
+      prevPageUrl: prevPage
+        ? this.buildFaqListUrl(prevPage, search, sortBy, sortDir)
+        : null,
+      nextPageUrl: nextPage
+        ? this.buildFaqListUrl(nextPage, search, sortBy, sortDir)
+        : null,
+      exportCsvUrl: this.buildFaqExportUrl(search, sortBy, sortDir),
+      questionSortUrl: this.buildSortUrl('question', search, sortBy, sortDir),
+      updatedAtSortUrl: this.buildSortUrl('updatedAt', search, sortBy, sortDir),
+      questionSortIndicator: this.buildSortIndicator('question', sortBy, sortDir),
+      updatedAtSortIndicator: this.buildSortIndicator(
+        'updatedAt',
+        sortBy,
+        sortDir,
+      ),
       errorMessage: '',
     };
+  }
+
+  @Get('export/csv')
+  async exportCsv(
+    @Query('search') searchQuery: string | undefined,
+    @Query('sortBy') sortByQuery: string | undefined,
+    @Query('sortDir') sortDirQuery: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const search = searchQuery?.trim() ?? '';
+    const sortBy = this.parseSortField(sortByQuery);
+    const sortDir = this.parseSortDirection(sortDirQuery);
+    const faqs = await this.faqService.findAllForExport(search, sortBy, sortDir);
+    const header = ['SR', 'Question', 'Answer', 'Created At', 'Updated At'];
+    const rows = faqs.map((faq, index) => [
+      String(index + 1),
+      faq.question ?? '',
+      faq.answer ?? '',
+      new Date(faq.createdAt).toISOString(),
+      new Date(faq.updatedAt).toISOString(),
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((value) => this.escapeCsvValue(value)).join(','))
+      .join('\r\n');
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="faqs-${timestamp}.csv"`,
+    );
+    res.status(200).send(csv);
   }
 
   @Get('new')
@@ -216,5 +306,75 @@ export class FaqController {
       return;
     }
     res.redirect(303, '/faqs');
+  }
+
+  private escapeCsvValue(value: string): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
+  }
+
+  private buildFaqListUrl(
+    page: number,
+    search: string,
+    sortBy: FaqSortField,
+    sortDir: FaqSortDirection,
+  ): string {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    if (search) {
+      params.set('search', search);
+    }
+    params.set('sortBy', sortBy);
+    params.set('sortDir', sortDir);
+    return `/faqs?${params.toString()}`;
+  }
+
+  private buildFaqExportUrl(
+    search: string,
+    sortBy: FaqSortField,
+    sortDir: FaqSortDirection,
+  ): string {
+    const params = new URLSearchParams();
+    if (search) {
+      params.set('search', search);
+    }
+    params.set('sortBy', sortBy);
+    params.set('sortDir', sortDir);
+    const serialized = params.toString();
+    return serialized ? `/faqs/export/csv?${serialized}` : '/faqs/export/csv';
+  }
+
+  private buildSortUrl(
+    targetField: FaqSortField,
+    search: string,
+    currentSortBy: FaqSortField,
+    currentSortDir: FaqSortDirection,
+  ): string {
+    const nextDir =
+      currentSortBy === targetField && currentSortDir === 'asc' ? 'desc' : 'asc';
+    return this.buildFaqListUrl(1, search, targetField, nextDir);
+  }
+
+  private buildSortIndicator(
+    targetField: FaqSortField,
+    currentSortBy: FaqSortField,
+    currentSortDir: FaqSortDirection,
+  ): string {
+    if (targetField !== currentSortBy) {
+      return '';
+    }
+    return currentSortDir === 'asc' ? ' (A-Z)' : ' (Z-A)';
+  }
+
+  private parseSortField(value: string | undefined): FaqSortField {
+    if (value === 'question' || value === 'updatedAt' || value === 'createdAt') {
+      return value;
+    }
+    return 'createdAt';
+  }
+
+  private parseSortDirection(value: string | undefined): FaqSortDirection {
+    return value === 'asc' ? 'asc' : 'desc';
   }
 }

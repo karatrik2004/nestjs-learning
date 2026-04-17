@@ -11,7 +11,10 @@ export type FaqListRowVm = {
   updatedAtLabel: string;
 };
 
-export function mapFaqsToListRows(faqs: FaqRecord[]): FaqListRowVm[] {
+export function mapFaqsToListRows(
+  faqs: FaqRecord[],
+  serialStart = 1,
+): FaqListRowVm[] {
   return faqs.map((faq, index) => {
     const rawAnswer = faq.answer ?? '';
     const normalized = rawAnswer.replace(/\s+/g, ' ').trim();
@@ -21,7 +24,7 @@ export function mapFaqsToListRows(faqs: FaqRecord[]): FaqListRowVm[] {
       : normalized;
     return {
       id: faq.id,
-      sr: index + 1,
+      sr: serialStart + index,
       question: faq.question,
       answerPreview: previewPlain,
       answerTitleAttr: isTruncated ? rawAnswer : null,

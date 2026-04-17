@@ -132,6 +132,26 @@ export class AuthController {
     @Body(TrimBodyPipe) body: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
+    return this.frontendApiLogin(body, res);
+  }
+
+  @Post('api/frontend/login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseInterceptors(
+    SanitizeUserResponseInterceptor,
+    ApiResponseEnvelopeInterceptor,
+  )
+  async apiFrontendLogin(
+    @Body(TrimBodyPipe) body: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<unknown> {
+    return this.frontendApiLogin(body, res);
+  }
+
+  private async frontendApiLogin(
+    body: LoginDto,
+    res: Response,
+  ): Promise<unknown> {
     const email = body.email.trim();
     const password = body.password;
     const user = await this.authService.validateUserCredentials(email, password);
@@ -140,16 +160,25 @@ export class AuthController {
       return { message: 'Invalid email or password' };
     }
 
+    const userRole = await this.authService.getUserRoleName(user);
+    const canLoginBackend = await this.authService.isBackendRole(userRole);
+    if (canLoginBackend) {
+      res.status(403);
+      return {
+        message:
+          'This account is for backend/admin access. Please use admin login.',
+      };
+    }
+
     const tokens = await this.authService.generateTokens(user);
     this.authCookies.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     return {
-      message: 'App login success',
+      message: 'Frontend login success',
       user: {
         id: user.id,
         email: user.email,
-        role: await this.authService.getUserRoleName(user),
+        role: userRole,
       },
-      // Intentionally included to show sanitize interceptor behavior.
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     };

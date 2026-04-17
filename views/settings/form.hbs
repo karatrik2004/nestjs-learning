@@ -1,0 +1,37 @@
+<h1 class="admin-page-title">Project Settings</h1>
+<p class="admin-page-desc">Manage core project configuration for the admin panel.</p>
+{{#if errorMessage}}
+<p class="admin-alert-error">{{errorMessage}}</p>
+{{/if}}
+{{#if successMessage}}
+<p style="margin:0 0 12px; color:#86efac; font-size:13px;">{{successMessage}}</p>
+{{/if}}
+<form method="post" action="/settings/save" class="admin-form" style="max-width:640px;">
+  <label class="admin-label">
+    Project Name *
+    <input class="admin-input" name="projectName" maxlength="100" required value="{{projectName}}" />
+  </label>
+  <label class="admin-label">
+    Support Email *
+    <input class="admin-input" name="supportEmail" type="email" required value="{{supportEmail}}" />
+  </label>
+  <label class="admin-label">
+    Default Page Size
+    <input
+      class="admin-input"
+      name="defaultPageSize"
+      type="number"
+      min="1"
+      max="200"
+      value="{{defaultPageSize}}"
+    />
+  </label>
+  <label class="admin-label" style="display:flex; align-items:center; gap:8px;">
+    <input name="maintenanceMode" type="checkbox" {{#if maintenanceMode}}checked{{/if}} />
+    Enable maintenance mode
+  </label>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <button class="btn btn-primary" type="submit">Save Settings</button>
+    <a class="btn" href="/dashboard" style="text-decoration:none;">Back</a>
+  </div>
+</form>

@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { engine as hbsEngine } from 'express-handlebars';
 import { join } from 'path';
 import helmet from 'helmet';
@@ -44,6 +45,15 @@ async function bootstrap() {
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads',
   });
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('NestJS Learning API')
+    .setDescription('API documentation')
+    .setVersion('1.0')
+    .build();
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api-docs', app, swaggerDocument);
+
   console.log('[4] Nest application created');
   await app.listen(process.env.PORT ?? 3000);
   console.log('[5] Server is listening');

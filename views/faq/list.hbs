@@ -3,16 +3,41 @@
 {{#if errorMessage}}
 <p class="admin-alert-error">{{errorMessage}}</p>
 {{/if}}
-<a class="btn btn-primary" href="/faqs/new" style="text-decoration:none; display:inline-flex; margin-bottom:14px;">Add
-  FAQ</a>
+<form method="get" action="/faqs" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+  <input type="hidden" name="sortBy" value="{{currentSortBy}}" />
+  <input type="hidden" name="sortDir" value="{{currentSortDir}}" />
+  <input
+    type="text"
+    name="search"
+    value="{{searchValue}}"
+    placeholder="Search question or answer"
+    style="min-width:260px; padding:8px 10px; border:1px solid #334155; border-radius:6px; background:#0f172a; color:#e2e8f0;"
+  />
+  <button class="btn" type="submit">Search</button>
+  {{#if searchValue}}
+  <a class="btn" href="/faqs" style="text-decoration:none; display:inline-flex;">Clear</a>
+  {{/if}}
+</form>
+<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+  <a class="btn btn-primary" href="/faqs/new" style="text-decoration:none; display:inline-flex;">Add FAQ</a>
+  <a class="btn" href="{{exportCsvUrl}}" style="text-decoration:none; display:inline-flex;">Export CSV</a>
+</div>
 <div class="admin-table-panel">
   <table class="admin-table">
     <thead>
       <tr>
         <th class="col-num">SR</th>
-        <th>Question</th>
+        <th>
+          <a href="{{questionSortUrl}}" style="color:inherit; text-decoration:none;">
+            Question{{questionSortIndicator}}
+          </a>
+        </th>
         <th>Answer</th>
-        <th>Updated At</th>
+        <th>
+          <a href="{{updatedAtSortUrl}}" style="color:inherit; text-decoration:none;">
+            Updated At{{updatedAtSortIndicator}}
+          </a>
+        </th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -42,4 +67,17 @@
       {{/if}}
     </tbody>
   </table>
+</div>
+<div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; gap:10px; flex-wrap:wrap;">
+  <span style="color:#94a3b8;">
+    Page {{currentPage}} of {{totalPages}} ({{totalItems}} items)
+  </span>
+  <div style="display:flex; gap:8px; align-items:center;">
+    {{#if prevPageUrl}}
+    <a class="btn" href="{{prevPageUrl}}" style="text-decoration:none;">Previous</a>
+    {{/if}}
+    {{#if nextPageUrl}}
+    <a class="btn" href="{{nextPageUrl}}" style="text-decoration:none;">Next</a>
+    {{/if}}
+  </div>
 </div>

@@ -1,4 +1,4 @@
-export type AdminNavKey = 'dashboard' | 'users' | 'roles' | 'faq';
+export type AdminNavKey = 'dashboard' | 'users' | 'roles' | 'faq' | 'settings';
 
 export type AdminNavItem = {
   label: string;
@@ -11,10 +11,11 @@ const HREF_BY_KEY: Record<AdminNavKey, string> = {
   users: '/users',
   roles: '/roles',
   faq: '/faqs',
+  settings: '/settings',
 };
 
 /**
- * Sidebar navigation for all admin HTML modules. Order: Dashboard, Users, FAQ, Roles (super admin only).
+ * Sidebar navigation for all admin HTML modules.
  */
 export function buildAdminNavItems(
   active: AdminNavKey,
@@ -24,6 +25,7 @@ export function buildAdminNavItems(
     { label: 'Dashboard', href: '/dashboard' },
     { label: 'Users', href: '/users' },
     { label: 'FAQ', href: '/faqs' },
+    { label: 'Settings', href: '/settings' },
   ];
   if (showRolesMenu) {
     items.push({ label: 'Roles', href: '/roles' });
